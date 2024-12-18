@@ -127,8 +127,61 @@ async function run () {
       }
     })
 
+    // get a user data
+    app.get('/users/:email', async (req, res) => {
+      const email = req.params.email
+      try {
+        const result = await userCollection.findOne({ email })
+        res.status(200).send(result)
+      } catch (err) {
+        console.log('Error occurred responding email get api')
+        res.status(500).send(err)
+      }
+    })
+
     // patch with previous user or create new one
-    app.patch('/user', async (req, res) => {})
+    app.patch('/users', async (req, res) => {
+      const {
+        email,
+        displayName,
+        photoURL,
+        title,
+        bio,
+        coverPhotoURL,
+        address,
+        phoneNumber,
+        fbAddress,
+        linkedInAddress,
+        twitterAddress
+      } = req.body
+      try {
+        const filter = { email }
+        const updatedDoc = {
+          $set: {
+            email,
+            displayName,
+            photoURL,
+            title,
+            bio,
+            coverPhotoURL,
+            address,
+            phoneNumber,
+            fbAddress,
+            linkedInAddress,
+            twitterAddress
+          }
+        }
+        const options = { upsert: true }
+        const result = await userCollection.updateOne(
+          filter,
+          updatedDoc,
+          options
+        )
+        res.status(200).send(result)
+      } catch (err) {
+        res.status(500).send(err)
+      }
+    })
   } finally {
     // Uncomment this line if you want to keep the connection open
     // await client.close();

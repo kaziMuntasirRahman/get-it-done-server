@@ -29,6 +29,9 @@ const client = new MongoClient(uri, {
 const DB = client.db('GET_IT_DONE')
 const serviceCollection = DB.collection('services')
 const userCollection = DB.collection('users')
+const messageCollection = DB.collection('messages')
+const subscriberCollection = DB.collection('subscribers')
+const bookingCollection = DB.collection('bookings')
 
 async function run () {
   try {
@@ -49,68 +52,92 @@ async function run () {
       }
     })
 
-    // delete a service
-    app.get('/services/:email', async (req, res) => {
-      const email = req.params.email
+    // get a service
+    app.get('/services/:id', async (req, res) => {
+      const id = req.params.id
       try {
-        // const result = await serviceCollection.find({ providerEmail: email })
-        const result = await serviceCollection.find({ providerEmail: email }).toArray()
-        res.status(200).send(result)
+        const service = await serviceCollection.findOne({
+          _id: new ObjectId(id)
+        })
+        res.status(200).send(service)
       } catch (err) {
         res.status(500).send(err)
       }
     })
 
     // get all services of an user
-    app.delete('/services', async (req, res) => {
-      console.log("Deletion request received")
-      const {id, email} = req.query
-      const requestService = await serviceCollection.findOne({ _id: new ObjectId(id) })
+    app.get('/user/services', async (req, res) => {
+      const email = req.query.email
       try {
-        if (!requestService || requestService.providerEmail !== email) {
-          res.status(400)
-        } else {
-          const result = await serviceCollection.deleteOne({ _id: new ObjectId(id) })
-          res.status(200).send(result)
-        }
+        const result = await serviceCollection
+          .find({ providerEmail: email })
+          .toArray()
+        res.status(200).send(result)
       } catch (err) {
         res.status(500).send(err)
       }
     })
 
-    //get all services or by page
-    app.get('/services', async (req, res) => {
-      const limit = parseInt(req.query.limit)
-      const page = parseInt(req.query.page) || 1
-      const totalCount = await serviceCollection.countDocuments()
+    
+        //get all services or by page
+        app.get('/services', async (req, res) => {
+          const limit = parseInt(req.query.limit)
+          const page = parseInt(req.query.page) || 1
+          const totalCount = await serviceCollection.countDocuments()
+          try {
+            if (limit > 0) {
+              const skip = (page - 1) * limit
+              const totalPages = Math.ceil(totalCount / limit)
+              const result = await serviceCollection
+                .find()
+                .skip(skip)
+                .limit(limit)
+                .toArray()
+              res.status(200).send({ result, totalCount, totalPages })
+            } else {
+              const result = await serviceCollection.find().toArray()
+              res.status(200).send({ services: result, totalCount })
+            }
+          } catch (error) {
+            res.status(500).send({ message: 'Server Error' })
+          }
+        })
+    
+    // delete a service
+    app.delete('/services', async (req, res) => {
+      console.log('Deletion request received')
+      const { id, email } = req.query
+      const requestService = await serviceCollection.findOne({
+        _id: new ObjectId(id)
+      })
       try {
-        if (limit > 0) {
-          const skip = (page - 1) * limit
-          const totalPages = Math.ceil(totalCount / limit)
-          const result = await serviceCollection
-            .find()
-            .skip(skip)
-            .limit(limit)
-            .toArray()
-          res.status(200).send({ result, totalCount, totalPages })
+        if (!requestService || requestService.providerEmail !== email) {
+          res.status(400)
         } else {
-          const result = await serviceCollection.find().toArray()
-          res.status(200).send({ services: result, totalCount })
+          const result = await serviceCollection.deleteOne({
+            _id: new ObjectId(id)
+          })
+          res.status(200).send(result)
         }
-      } catch (error) {
-        res.status(500).send({ message: 'Server Error' })
+      } catch (err) {
+        res.status(500).send(err)
       }
     })
 
     // update a service
     app.patch('/services', async (req, res) => {
-      const {email, id} = req.query
-      const requestService = await serviceCollection.findOne({ _id: new ObjectId(id) })
+      const { email, id } = req.query
+      const requestService = await serviceCollection.findOne({
+        _id: new ObjectId(id)
+      })
       try {
         if (!requestService || requestService.providerEmail !== email) {
           res.status(400)
         } else {
-          const result = await serviceCollection.updateOne({ _id: new ObjectId(id) }, { $set: req.body })
+          const result = await serviceCollection.updateOne(
+            { _id: new ObjectId(id) },
+            { $set: req.body }
+          )
           res.status(200).send(result)
         }
       } catch (err) {
@@ -118,14 +145,101 @@ async function run () {
       }
     })
 
-    // delete a service
-    app.delete('/services/:id', async (req, res) => {
-      const id = req.params.id
+
+    // post a booking
+    app.post('/bookings', async (req, res) => {
+      const booking = req.body
       try {
-        const result = await userCollection.deleteOne({ _id: id })
+        const result = await bookingCollection.insertOne(booking)
         res.status(200).send(result)
       } catch (err) {
-        console.log(err.messages)
+        res.status(500).send(err)
+      }
+    })
+
+    // get bookings by email
+    app.get('/bookings/:email', async (req, res) => {
+      const email = req.params.email
+      const bookings = await bookingCollection.find({ userEmail: email }).toArray()
+      res.status(200).send(bookings)
+    })
+
+    // get bookings of the provider
+    app.get('/bookings/provider/:email', async (req, res) => {
+      const email = req.params.email
+      const bookings = await bookingCollection.find({ providerEmail: email }).toArray()
+      res.status(200).send(bookings)
+    })
+
+    // delete a booking
+    app.delete('/bookings/:id', async (req, res) => {
+      const { id, email } = req.query
+      const requestBooking = await bookingCollection.findOne({
+        _id: new ObjectId(id)
+      })
+      try {
+        if (!requestBooking || requestBooking.email !== email) {
+          res.status(400)
+        } else {
+          const result = await bookingCollection.deleteOne({ _id: new ObjectId(id) })
+          res.status(200).send(result)
+        }
+      } catch (err) {
+        res.status(500).send(err)
+      }
+    })
+
+    // post a message
+    app.post('/messages', async (req, res) => {
+      const { name, email, subject, message } = req.body
+      try {
+        const result = await messageCollection.insertOne({
+          name,
+          email,
+          subject,
+          message
+        })
+        res.status(200).send(result)
+      } catch (err) {
+        res.status(500).send(err)
+      }
+    })
+
+    // get all messages
+    app.get('/messages', async (req, res) => {
+      try {
+        const result = await messageCollection.find().toArray()
+        res.status(200).send(result)
+      } catch (err) {
+        res.status(500).send(err)
+      }
+    })
+
+    // post a subscriber
+    app.post('/subscribers', async (req, res) => {
+      const { email } = req.body
+      const existingSubscriber = await subscriberCollection.findOne({ email })
+      try {
+        if (existingSubscriber) {
+          res.status(400).send({ message: 'Subscriber already exists' })
+        } else {
+          const result = await subscriberCollection.insertOne({ 
+            email,
+            subscribedAt: new Date()
+          })
+          res.status(200).send(result)
+        }
+      } catch (err) {
+        res.status(500).send(err)
+      }
+    })
+
+    // get all subscribers
+    app.get('/subscribers', async (req, res) => {
+      try {
+        const result = await subscriberCollection.find().toArray()
+        res.status(200).send(result)
+      } catch (err) {
         res.status(500).send(err)
       }
     })

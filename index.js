@@ -1,7 +1,7 @@
 const express = require('express')
 const cors = require('cors')
 require('dotenv').config()
-const { MongoClient, ServerApiVersion } = require('mongodb')
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb')
 
 const app = express()
 const port = process.env.PORT
@@ -36,6 +36,48 @@ async function run () {
     // await client.db('admin').command({ ping: 1 })
     console.log('Pinged your deployment. Successfully connected to MongoDB!')
 
+    // add services
+    app.post('/services', async (req, res) => {
+      const service = req.body
+      service.comment = []
+      service.postedDate = new Date()
+      try {
+        const result = await serviceCollection.insertOne(service)
+        res.status(200).send(result)
+      } catch (err) {
+        res.status(500).send(err)
+      }
+    })
+
+    // delete a service
+    app.get('/services/:email', async (req, res) => {
+      const email = req.params.email
+      try {
+        // const result = await serviceCollection.find({ providerEmail: email })
+        const result = await serviceCollection.find({ providerEmail: email }).toArray()
+        res.status(200).send(result)
+      } catch (err) {
+        res.status(500).send(err)
+      }
+    })
+
+    // get all services of an user
+    app.delete('/services', async (req, res) => {
+      console.log("Deletion request received")
+      const {id, email} = req.query
+      const requestService = await serviceCollection.findOne({ _id: new ObjectId(id) })
+      try {
+        if (!requestService || requestService.providerEmail !== email) {
+          res.status(400)
+        } else {
+          const result = await serviceCollection.deleteOne({ _id: new ObjectId(id) })
+          res.status(200).send(result)
+        }
+      } catch (err) {
+        res.status(500).send(err)
+      }
+    })
+
     //get all services or by page
     app.get('/services', async (req, res) => {
       const limit = parseInt(req.query.limit)
@@ -57,6 +99,34 @@ async function run () {
         }
       } catch (error) {
         res.status(500).send({ message: 'Server Error' })
+      }
+    })
+
+    // update a service
+    app.patch('/services', async (req, res) => {
+      const {email, id} = req.query
+      const requestService = await serviceCollection.findOne({ _id: new ObjectId(id) })
+      try {
+        if (!requestService || requestService.providerEmail !== email) {
+          res.status(400)
+        } else {
+          const result = await serviceCollection.updateOne({ _id: new ObjectId(id) }, { $set: req.body })
+          res.status(200).send(result)
+        }
+      } catch (err) {
+        res.status(500).send(err)
+      }
+    })
+
+    // delete a service
+    app.delete('/services/:id', async (req, res) => {
+      const id = req.params.id
+      try {
+        const result = await userCollection.deleteOne({ _id: id })
+        res.status(200).send(result)
+      } catch (err) {
+        console.log(err.messages)
+        res.status(500).send(err)
       }
     })
 
@@ -139,7 +209,7 @@ async function run () {
       }
     })
 
-    // patch with previous user or create new one
+    // update existing user info
     app.patch('/users', async (req, res) => {
       const {
         email,
@@ -154,11 +224,14 @@ async function run () {
         linkedInAddress,
         twitterAddress
       } = req.body
+
+      const existingUser = await userCollection.findOne({ email })
+
       try {
         const filter = { email }
         const updatedDoc = {
           $set: {
-            email,
+            id: existingUser.id || usersCount + 1,
             displayName,
             photoURL,
             title,
@@ -168,7 +241,9 @@ async function run () {
             phoneNumber,
             fbAddress,
             linkedInAddress,
-            twitterAddress
+            twitterAddress,
+            isAvailable: existingUser.isAvailable || true,
+            isVerified: existingUser.isVerified || false
           }
         }
         const options = { upsert: true }
